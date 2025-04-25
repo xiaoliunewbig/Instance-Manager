@@ -1,0 +1,431 @@
+syntax = "proto3";
+
+option cc_generic_services = false;
+
+package im;
+
+// 用户状态
+enum UserStatus {
+  OFFLINE = 0;
+  ONLINE = 1;
+  AWAY = 2;
+  BUSY = 3;
+}
+
+// 消息类型
+enum MessageType {
+  TEXT = 0;
+  IMAGE = 1;
+  FILE_TYPE = 2;
+  EMOTICON = 3;
+  NOTIFICATION = 8;
+}
+
+// 文件传输状态
+enum FileTransferStatus {
+  PENDING = 0;
+  TRANSFERRING = 1;
+  COMPLETED = 2;
+  FAILED = 3;
+  REJECTED = 4;
+}
+
+// 用户信息
+message UserInfo {
+  int64 user_id = 1;
+  string username = 2;
+  string email = 3;
+  string nickname = 4;
+  string avatar_url = 5;
+  UserStatus status = 6;
+}
+
+// 好友关系
+message FriendRelation {
+  int64 user_id = 1;
+  int64 friend_id = 2;
+  string remark = 3;
+  int64 create_time = 4;
+}
+
+// 好友请求
+message FriendRequest {
+  int64 request_id = 1;
+  int64 from_user_id = 2;
+  int64 to_user_id = 3;
+  string message = 4;
+  int64 create_time = 5;
+  bool is_accepted = 6;
+  bool is_rejected = 7;
+}
+
+// 通知订阅请求
+message SubscriptionRequest {
+  int64 user_id = 1;
+  string device_token = 2;  // 可选，用于移动设备推送
+}
+
+// 消息
+message Message {
+  int64 message_id = 1;
+  int64 from_user_id = 2;
+  int64 to_user_id = 3;
+  MessageType message_type = 4;
+  string content = 5;
+  int64 send_time = 6;
+  bool is_read = 7;
+  string extra_info = 8; // 额外信息，例如图片URL或文件信息的JSON字符串
+}
+
+// 文件信息
+message FileInfo {
+  int64 file_id = 1;
+  string file_name = 2;
+  int64 file_size = 3;
+  string file_type = 4;
+  string file_path = 5;
+  int64 upload_time = 6;
+  int64 uploader_id = 7;
+}
+
+// 文件传输请求
+message FileTransferRequest {
+  int64 request_id = 1;
+  int64 from_user_id = 2;
+  int64 to_user_id = 3;
+  FileInfo file_info = 4;
+  int64 create_time = 5;
+  FileTransferStatus status = 6;
+}
+
+// 文件块
+message FileChunk {
+  int64 file_id = 1;
+  int32 chunk_index = 2;
+  bytes chunk_data = 3;
+  bool is_last_chunk = 4;
+}
+
+// 注册请求
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  string email = 3;
+  string verification_code = 4;
+  string nickname = 5;
+}
+
+// 注册响应
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+  int64 user_id = 3;
+}
+
+// 登录请求
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// 登录响应
+message LoginResponse {
+  bool success = 1;
+  string message = 2;
+  string token = 3;
+  UserInfo user_info = 4;
+}
+
+// 发送验证码请求
+message SendVerificationCodeRequest {
+  string email = 1;
+}
+
+// 发送验证码响应
+message SendVerificationCodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 获取用户信息请求
+message GetUserInfoRequest {
+  int64 user_id = 1;
+}
+
+// 获取用户信息响应
+message GetUserInfoResponse {
+  bool success = 1;
+  string message = 2;
+  UserInfo user_info = 3;
+}
+
+// 更新用户信息请求
+message UpdateUserInfoRequest {
+  int64 user_id = 1;
+  string nickname = 2;
+  string avatar_url = 3;
+  UserStatus status = 4;
+}
+
+// 更新用户信息响应
+message UpdateUserInfoResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 添加好友请求
+message AddFriendRequest {
+  int64 from_user_id = 1;
+  int64 to_user_id = 2;
+  string message = 3;
+}
+
+// 添加好友响应
+message AddFriendResponse {
+  bool success = 1;
+  string message = 2;
+  int64 request_id = 3;
+}
+
+// 处理好友请求
+message HandleFriendRequestRequest {
+  int64 request_id = 1;
+  bool accept = 2;
+}
+
+// 处理好友请求响应
+message HandleFriendRequestResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 获取好友列表请求
+message GetFriendsRequest {
+  int64 user_id = 1;
+}
+
+// 获取好友列表响应
+message GetFriendsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated UserInfo friends = 3;
+}
+
+// 发送消息请求
+message SendMessageRequest {
+  int64 from_user_id = 1;
+  int64 to_user_id = 2;
+  MessageType message_type = 3;
+  string content = 4;
+  string extra_info = 5;
+}
+
+// 发送消息响应
+message SendMessageResponse {
+  bool success = 1;
+  string message = 2;
+  int64 message_id = 3;
+  int64 send_time = 4;
+}
+
+// 获取消息历史请求
+message GetMessageHistoryRequest {
+  int64 user_id = 1;
+  int64 friend_id = 2;
+  int64 start_time = 3;
+  int64 end_time = 4;
+  int32 limit = 5;
+}
+
+// 获取消息历史响应
+message GetMessageHistoryResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Message messages = 3;
+}
+
+// 获取离线消息请求
+message GetOfflineMessagesRequest {
+  int64 user_id = 1;
+}
+
+// 获取离线消息响应
+message GetOfflineMessagesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Message messages = 3;
+}
+
+// 标记消息为已读请求
+message MarkMessageReadRequest {
+  int64 user_id = 1;
+  int64 message_id = 2;
+}
+
+// 标记消息为已读响应
+message MarkMessageReadResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 上传文件请求
+message UploadFileRequest {
+  int64 uploader_id = 1;
+  string file_name = 2;
+  int64 file_size = 3;
+  string file_type = 4;
+}
+
+// 上传文件响应
+message UploadFileResponse {
+  bool success = 1;
+  string message = 2;
+  int64 file_id = 3;
+}
+
+// 下载文件请求
+message DownloadFileRequest {
+  int64 file_id = 1;
+  int64 user_id = 2;
+}
+
+// 下载文件响应
+message DownloadFileResponse {
+  bool success = 1;
+  string message = 2;
+  FileInfo file_info = 3;
+}
+
+// 发送文件传输请求
+message SendFileTransferRequest {
+  int64 from_user_id = 1;
+  int64 to_user_id = 2;
+  int64 file_id = 3;
+}
+
+// 发送文件传输响应
+message SendFileTransferResponse {
+  bool success = 1;
+  string message = 2;
+  int64 request_id = 3;
+}
+
+// 处理文件传输请求
+message HandleFileTransferRequest {
+  int64 request_id = 1;
+  bool accept = 2;
+}
+
+// 处理文件传输响应
+message HandleFileTransferResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 获取待处理的好友请求
+message GetPendingFriendRequestsRequest {
+  int64 user_id = 1;
+}
+
+// 获取待处理的好友请求响应
+message GetPendingFriendRequestsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated FriendRequest requests = 3;
+}
+
+// 通用响应
+message CommonResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 用户服务
+service UserService {
+  // 注册用户
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  // 登录
+  rpc Login(LoginRequest) returns (LoginResponse);
+  // 发送验证码
+  rpc SendVerificationCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
+  // 获取用户信息
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+  // 更新用户信息
+  rpc UpdateUserInfo(UpdateUserInfoRequest) returns (UpdateUserInfoResponse);
+  // 获取用户待审批列表（仅管理员）
+  rpc GetPendingApprovals(stream UserInfo) returns (CommonResponse);
+  // 审批用户注册（仅管理员）
+  rpc ApproveUser(UserInfo) returns (CommonResponse);
+}
+
+// 关系服务
+service RelationService {
+  // 添加好友请求
+  rpc AddFriend(AddFriendRequest) returns (AddFriendResponse);
+  // 处理好友请求
+  rpc HandleFriendRequest(HandleFriendRequestRequest) returns (HandleFriendRequestResponse);
+  // 获取好友列表
+  rpc GetFriends(GetFriendsRequest) returns (GetFriendsResponse);
+  // 获取待处理的好友请求
+  rpc GetPendingFriendRequests(GetPendingFriendRequestsRequest) returns (GetPendingFriendRequestsResponse);
+  // 删除好友
+  rpc DeleteFriend(FriendRelation) returns (CommonResponse);
+}
+
+// 消息服务
+service MessageService {
+  // 发送消息
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  // 获取消息历史
+  rpc GetMessageHistory(GetMessageHistoryRequest) returns (GetMessageHistoryResponse);
+  // 获取离线消息
+  rpc GetOfflineMessages(GetOfflineMessagesRequest) returns (GetOfflineMessagesResponse);
+  // 标记消息为已读
+  rpc MarkMessageRead(MarkMessageReadRequest) returns (MarkMessageReadResponse);
+  // 消息流（双向流，用于实时聊天）
+  rpc MessageStream(stream Message) returns (stream Message);
+}
+
+// 文件服务
+service FileService {
+  // 请求上传文件
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse);
+  // 上传文件块（流式）
+  rpc UploadFileChunk(stream FileChunk) returns (CommonResponse);
+  // 下载文件请求
+  rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse);
+  // 下载文件块（流式）
+  rpc DownloadFileChunk(DownloadFileRequest) returns (stream FileChunk);
+  // 发送文件传输请求
+  rpc SendFileTransfer(SendFileTransferRequest) returns (SendFileTransferResponse);
+  // 处理文件传输请求
+  rpc HandleFileTransfer(HandleFileTransferRequest) returns (HandleFileTransferResponse);
+}
+
+// 通知服务
+service NotificationService {
+  // 获取通知流（服务器推送通知到客户端）
+  rpc SubscribeNotifications(SubscriptionRequest) returns (stream Message);
+}
+
+// 管理员服务
+service AdminService {
+  // 获取系统状态
+  rpc GetSystemStatus(CommonRequest) returns (CommonResponse);
+  // 重启服务
+  rpc RestartService(RestartServiceRequest) returns (CommonResponse);
+}
+
+// 通用请求
+message CommonRequest {
+  int64 user_id = 1;
+  string token = 2;
+  map<string, string> parameters = 3;
+}
+
+// 重启服务请求
+message RestartServiceRequest {
+  int64 admin_id = 1;
+  string token = 2;
+  string service_name = 3;
+} 

@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-13" cr libim_server_core.a CMakeFiles/im_server_core.dir/Unity/unity_0_cxx.cxx.o
+"/usr/bin/gcc-ranlib-13" libim_server_core.a

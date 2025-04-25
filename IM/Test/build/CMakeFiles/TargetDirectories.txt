@@ -1,0 +1,9 @@
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/im_server_core.dir
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/server_test.dir
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/test_cases.dir
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/edit_cache.dir
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/rebuild_cache.dir
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/list_install_components.dir
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/install.dir
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/install/local.dir
+/home/pck/markdown/重构/IM/Test/build/CMakeFiles/install/strip.dir
