@@ -265,6 +265,11 @@ public:
      */
     bool Expire(const std::string& key, int seconds);
 
+    /**
+     * @brief 异步连接到Redis服务器
+     */
+    void ConnectAsync();
+
 private:
     // Redis连接参数
     std::string host_;

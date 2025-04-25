@@ -29,83 +29,58 @@ MySQLConnection::~MySQLConnection() {
 }
 
 bool MySQLConnection::Connect() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
-    if (connected_) {
+    if (IsConnected()) {
         return true;
     }
-
+    
     mysql_ = mysql_init(nullptr);
     if (!mysql_) {
-        last_error_ = "Failed to initialize MySQL connection";
-        LogError("Failed to initialize MySQL connection");
+        LOG_CRITICAL("MySQL初始化失败");
         return false;
     }
-
-    // 设置自动重连
-    bool reconnect = 1;
+    
+    bool reconnect = true;
     mysql_options(mysql_, MYSQL_OPT_RECONNECT, &reconnect);
-
-    // 设置连接超时
-    int timeout = 5;
-    mysql_options(mysql_, MYSQL_OPT_CONNECT_TIMEOUT, &timeout);
-
-    // 连接数据库
-    if (!mysql_real_connect(mysql_, host_.c_str(), user_.c_str(), password_.c_str(), 
-                          database_.c_str(), port_, nullptr, 0)) {
-        last_error_ = mysql_error(mysql_);
-        LogError("Failed to connect to MySQL: " + last_error_);
+    
+    mysql_options(mysql_, MYSQL_SET_CHARSET_NAME, "utf8mb4");
+    
+    int connect_timeout = 5;
+    mysql_options(mysql_, MYSQL_OPT_CONNECT_TIMEOUT, &connect_timeout);
+    
+    unsigned long max_allowed_packet = 1073741824; // 1GB
+    mysql_options(mysql_, MYSQL_OPT_MAX_ALLOWED_PACKET, &max_allowed_packet);
+    
+    if (!mysql_real_connect(mysql_, host_.c_str(), user_.c_str(), 
+                            password_.c_str(), database_.c_str(), 
+                            port_, nullptr, 0)) {
+        std::string error = mysql_error(mysql_);
+        LOG_CRITICAL("MySQL连接失败: {}", error);
         mysql_close(mysql_);
         mysql_ = nullptr;
         return false;
     }
-
-    // 修改设置max_allowed_packet的方法
-    unsigned long max_allowed_packet = 1073741824; // 1GB
-    if (mysql_options(mysql_, MYSQL_OPT_MAX_ALLOWED_PACKET, &max_allowed_packet) != 0) {
-        LogWarning("[MySQL] 使用mysql_options设置max_allowed_packet失败，尝试通过SQL命令设置");
-        
-        // 使用SET GLOBAL命令 (需要足够权限)
-        if (user_ == "root" || HasAdminPrivileges()) {
-            ExecuteUpdate("SET GLOBAL max_allowed_packet=1073741824");
-        }
-        
-        // 无论全局设置是否成功，都尝试设置会话级别
-        ExecuteUpdate("SET SESSION max_allowed_packet=1073741824");
-    }
-
-    // 设置字符集
-    mysql_set_character_set(mysql_, "utf8mb4");
-
-    // 检查数据包大小并动态调整max_allowed_packet
-    if (max_allowed_packet < 104857600) {
-        LogWarning("max_allowed_packet设置过小，自动调整为100MB");
-        max_allowed_packet = 104857600;
-    }
-
-    // 设置一系列会话变量以解决可能的问题
-    const char* init_commands[] = {
-        "SET SESSION max_allowed_packet=1073741824",  // 1GB
-        "SET SESSION net_buffer_length=1048576",      // 1MB
-        "SET SESSION interactive_timeout=28800",      // 8小时
-        "SET SESSION wait_timeout=28800",             // 8小时
-        "SET SESSION connect_timeout=60",             // 60秒
-        "SET SESSION net_read_timeout=60",            // 60秒
-        "SET SESSION net_write_timeout=60",           // 60秒
-        NULL
-    };
-
-    // 执行所有初始化命令
-    for (int i = 0; init_commands[i] != NULL; i++) {
-        if (mysql_query(mysql_, init_commands[i]) != 0) {
-            LogWarning(std::string("无法执行初始化命令: ") + init_commands[i]);
-        } else {
-            LogInfo(std::string("已执行: ") + init_commands[i]);
-        }
+    
+    LOG_INFO("MySQL连接成功");
+    connected_ = true;
+    
+    bool success = true;
+    
+    success &= ExecuteSimpleQuery("SET SESSION max_allowed_packet=1073741824");
+    if (!success) {
+        LOG_WARN("无法设置max_allowed_packet");
     }
     
-    connected_ = true;
-    LogDebug("Connected to MySQL database: " + database_);
+    success &= ExecuteSimpleQuery("SET SESSION net_buffer_length=1048576");
+    if (!success) {
+        LOG_WARN("无法设置net_buffer_length");
+    }
+    
+    success &= ExecuteSimpleQuery("SET SESSION interactive_timeout=28800");
+    success &= ExecuteSimpleQuery("SET SESSION wait_timeout=28800");
+    success &= ExecuteSimpleQuery("SET SESSION connect_timeout=60");
+    success &= ExecuteSimpleQuery("SET SESSION net_read_timeout=60");
+    success &= ExecuteSimpleQuery("SET SESSION net_write_timeout=60");
+    
     return true;
 }
 
@@ -127,7 +102,6 @@ bool MySQLConnection::IsConnected() const {
         return false;
     }
     
-    // 使用mysql_ping检查连接是否有效
     return mysql_ping(mysql_) == 0;
 }
 
@@ -147,7 +121,6 @@ MySQLConnection::ResultSet MySQLConnection::ExecuteQuery(
             throw std::runtime_error("Failed to prepare statement: " + last_error_);
         }
         
-        // 执行语句
         if (mysql_stmt_execute(stmt) != 0) {
             last_error_ = mysql_stmt_error(stmt);
             LogError("Failed to execute query: " + last_error_);
@@ -155,10 +128,8 @@ MySQLConnection::ResultSet MySQLConnection::ExecuteQuery(
             throw std::runtime_error("Failed to execute query: " + last_error_);
         }
         
-        // 获取结果
         ResultSet results = FetchResults(stmt);
         
-        // 关闭语句
         mysql_stmt_close(stmt);
         
         return results;
@@ -188,7 +159,6 @@ bool MySQLConnection::ExecuteUpdate(
                 return false;
             }
             
-            // 执行语句
             if (mysql_stmt_execute(stmt) != 0) {
                 last_error_ = mysql_stmt_error(stmt);
                 LogError("Failed to execute update: " + last_error_);
@@ -196,20 +166,16 @@ bool MySQLConnection::ExecuteUpdate(
                 return false;
             }
             
-            // 获取影响的行数
             my_ulonglong affected_rows = mysql_stmt_affected_rows(stmt);
             
-            // 关闭语句
             mysql_stmt_close(stmt);
             
             return affected_rows > 0;
         } catch (const std::exception& e) {
             std::string error = e.what();
-            // 检查是否是max_allowed_packet相关错误
             if (error.find("max_allowed_packet") != std::string::npos && retries > 1) {
                 LogWarning("[MySQL] 执行查询时出现max_allowed_packet错误，尝试重新设置并重试");
                 
-                // 尝试重新设置packet大小并重试
                 try {
                     ExecuteUpdate("SET SESSION max_allowed_packet=1073741824");
                 } catch (...) {
@@ -220,7 +186,6 @@ bool MySQLConnection::ExecuteUpdate(
                 continue;
             }
             
-            // 其他错误或最后一次重试
             LogError(std::string("[MySQL] ") + __func__ + " 错误: " + e.what());
             retries = 0;
         }
@@ -246,7 +211,6 @@ int64_t MySQLConnection::ExecuteInsert(
             return 0;
         }
         
-        // 执行语句
         if (mysql_stmt_execute(stmt) != 0) {
             last_error_ = mysql_stmt_error(stmt);
             LogError("Failed to execute insert: " + last_error_);
@@ -254,10 +218,8 @@ int64_t MySQLConnection::ExecuteInsert(
             return 0;
         }
         
-        // 获取自增ID
         my_ulonglong insert_id = mysql_stmt_insert_id(stmt);
         
-        // 关闭语句
         mysql_stmt_close(stmt);
         
         return static_cast<int64_t>(insert_id);
@@ -341,7 +303,6 @@ MYSQL_STMT* MySQLConnection::PrepareStatement(
         return nullptr;
     }
     
-    // 检查参数数量是否匹配
     unsigned long param_count = mysql_stmt_param_count(stmt);
     if (param_count != params.size()) {
         std::ostringstream oss;
@@ -352,7 +313,6 @@ MYSQL_STMT* MySQLConnection::PrepareStatement(
         return nullptr;
     }
     
-    // 如果有参数，绑定它们
     if (param_count > 0) {
         if (!BindParams(stmt, params)) {
             mysql_stmt_close(stmt);
@@ -369,11 +329,9 @@ bool MySQLConnection::BindParams(
 ) {
     unsigned long param_count = mysql_stmt_param_count(stmt);
     
-    // 准备绑定数组
     std::vector<MYSQL_BIND> binds(param_count);
     std::vector<unsigned long> lengths(param_count);
     
-    // 初始化绑定数组
     for (unsigned long i = 0; i < param_count; i++) {
         const std::string& param = params[i];
         lengths[i] = param.length();
@@ -386,7 +344,6 @@ bool MySQLConnection::BindParams(
         binds[i].is_null = 0;
     }
     
-    // 绑定参数
     if (mysql_stmt_bind_param(stmt, binds.data()) != 0) {
         last_error_ = mysql_stmt_error(stmt);
         LogError("Failed to bind parameters: " + last_error_);
@@ -399,43 +356,35 @@ bool MySQLConnection::BindParams(
 MySQLConnection::ResultSet MySQLConnection::FetchResults(MYSQL_STMT* stmt) {
     ResultSet results;
     
-    // 获取结果集元数据
     MYSQL_RES* meta = mysql_stmt_result_metadata(stmt);
     if (!meta) {
-        // 可能是一个不返回结果的语句（如INSERT, UPDATE等）
         return results;
     }
     
-    // 获取列数
     int num_fields = mysql_num_fields(meta);
     
-    // 准备绑定数组
     std::vector<MYSQL_BIND> binds(num_fields);
     std::vector<std::vector<char>> buffers(num_fields);
     std::vector<unsigned long> lengths(num_fields);
-    // 使用char数组代替std::vector<bool>以解决地址问题
     std::vector<char> is_nulls(num_fields, 0);
     std::vector<char> errors(num_fields, 0);
     
-    // 获取列名
     std::vector<std::string> field_names;
     MYSQL_FIELD* fields = mysql_fetch_fields(meta);
     for (int i = 0; i < num_fields; i++) {
         field_names.push_back(fields[i].name);
         
-        // 为每一列分配足够大的缓冲区，增加到64KB
         buffers[i].resize(65536);
         
         memset(&binds[i], 0, sizeof(MYSQL_BIND));
         binds[i].buffer_type = MYSQL_TYPE_STRING;
         binds[i].buffer = buffers[i].data();
-        binds[i].buffer_length = buffers[i].size() - 1; // 留一个字节给终止符
+        binds[i].buffer_length = buffers[i].size() - 1;
         binds[i].length = &lengths[i];
         binds[i].is_null = (bool*)&is_nulls[i];
         binds[i].error = (bool*)&errors[i];
     }
     
-    // 绑定结果集
     if (mysql_stmt_bind_result(stmt, binds.data()) != 0) {
         last_error_ = mysql_stmt_error(stmt);
         LogError("Failed to bind result: " + last_error_);
@@ -443,7 +392,6 @@ MySQLConnection::ResultSet MySQLConnection::FetchResults(MYSQL_STMT* stmt) {
         return results;
     }
     
-    // 存储结果集
     if (mysql_stmt_store_result(stmt) != 0) {
         last_error_ = mysql_stmt_error(stmt);
         LogError("Failed to store result: " + last_error_);
@@ -451,10 +399,8 @@ MySQLConnection::ResultSet MySQLConnection::FetchResults(MYSQL_STMT* stmt) {
         return results;
     }
     
-    // 获取行数
     my_ulonglong num_rows = mysql_stmt_num_rows(stmt);
     
-    // 提取结果
     while (mysql_stmt_fetch(stmt) == 0) {
         Row row;
         for (int i = 0; i < num_fields; i++) {
@@ -498,7 +444,6 @@ bool MySQLConnection::CheckAndReconnect() {
             return true;
         }
         
-        // 连接已经断开，尝试重连
         LogDebug("MySQL connection lost, attempting to reconnect...");
         connected_ = false;
     }
@@ -522,11 +467,9 @@ void MySQLConnection::LogWarning(const std::string& message) const {
     LOG_WARN("[MySQL] {}", message);
 }
 
-// 添加检查用户权限的函数
 bool MySQLConnection::HasAdminPrivileges() {
     auto result = ExecuteQuery("SHOW GRANTS FOR CURRENT_USER()");
     for (const auto& row : result) {
-        // 由于Row是map，我们需要遍历所有列来查找权限
         for (const auto& [column, value] : row) {
             if (value.find("ALL PRIVILEGES") != std::string::npos) {
                 return true;
@@ -534,6 +477,21 @@ bool MySQLConnection::HasAdminPrivileges() {
         }
     }
     return false;
+}
+
+bool MySQLConnection::ExecuteSimpleQuery(const std::string& sql) {
+    if (!mysql_) {
+        LOG_ERROR("[MySQL] MySQL连接无效");
+        return false;
+    }
+    
+    if (mysql_query(mysql_, sql.c_str()) != 0) {
+        last_error_ = mysql_error(mysql_);
+        LOG_ERROR("[MySQL] 无法执行查询: {}", last_error_);
+        return false;
+    }
+    
+    return true;
 }
 
 } // namespace db

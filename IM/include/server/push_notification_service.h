@@ -35,7 +35,7 @@ class KafkaProducer;
 }
 }
 // 继承基类所需的实际包含
-#include "../../build/generated/service.grpc.pb.h"
+#include "generated/service.grpc.pb.h"
 
 namespace im {
 

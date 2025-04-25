@@ -159,6 +159,8 @@ private:
      * @param message 警告信息
      */
     void LogWarning(const std::string& message) const;
+
+    bool ExecuteSimpleQuery(const std::string& sql);
     
     /**
      * @brief 记录错误日志
@@ -171,11 +173,10 @@ private:
     std::string user_;
     std::string password_;
     std::string database_;
-    
     MYSQL* mysql_;
     mutable std::mutex mutex_;
     bool connected_;
-    std::string last_error_;
+    mutable std::string last_error_;
 };
 
 } // namespace db

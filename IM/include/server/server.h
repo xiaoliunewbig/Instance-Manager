@@ -5,7 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <functional>
-#include "../../build/generated/service.grpc.pb.h"
+#include "generated/service.grpc.pb.h"
 // 改用前向声明替代直接包含
 //#include "include/server/message_service.h"
 //#include "include/server/user_service.h"
@@ -288,6 +288,14 @@ private:
     };
     std::mutex websocket_mutex_;
     std::unordered_map<int64_t, std::vector<WebSocketConnection>> websocket_connections_;
+    
+    // WebSocket相关
+    boost::asio::io_context io_context_;
+    std::unique_ptr<tcp::acceptor> websocket_acceptor_;
+    std::shared_ptr<WebSocketHandler> websocket_handler_;
+    std::thread websocket_thread_;
+    
+    void do_accept();
 };
 }   // namespace im
 

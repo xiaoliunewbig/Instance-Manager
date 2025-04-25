@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include <grpcpp/grpcpp.h>
-#include "../../build/generated/service.grpc.pb.h"
+#include "generated/service.grpc.pb.h"
 #include "db/mysql_connection.h"
 #include "db/redis_client.h"
 #include "kafka/kafka_producer.h"

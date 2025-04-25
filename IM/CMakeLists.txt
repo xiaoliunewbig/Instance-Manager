@@ -189,6 +189,7 @@ add_dependencies(im_server proto_copy)
 target_include_directories(im_server PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/build_ninja/generated
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_BINARY_DIR}
     ${GENERATED_PROTO_DIR}

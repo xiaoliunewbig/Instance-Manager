@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <grpcpp/grpcpp.h>
-#include "../../build/generated/service.grpc.pb.h"
+#include "generated/service.grpc.pb.h"
 #include "include/server/db/mysql_connection.h"
 #include "include/server/db/redis_client.h"
 #include "include/server/kafka/kafka_producer.h"

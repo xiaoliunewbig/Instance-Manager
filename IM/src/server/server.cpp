@@ -6,6 +6,12 @@
 #include "include/server/file_service.h"
 #include "include/server/notification_service.h"
 #include <algorithm>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/io_context.hpp>
+#include "include/server/websocket_handler.h"
+
+using tcp = boost::asio::ip::tcp;
+
 // namespace db {
 //   class MySQLConnection;
 //   class RedisClient;
@@ -166,7 +172,11 @@ namespace im {
         im::SendMessageResponse response;
         request.set_to_user_id(user_id);
         request.CopyFrom(message);
-        message_service_->SendMessage(&context, &request, &response);
+        if (redis_client_ && redis_client_->IsConnected()) {
+            message_service_->SendMessage(&context, &request, &response);
+        } else {
+            LOG_WARN("Redis连接尚未建立，跳过此操作");
+        }
     }
     
     im::PushNotificationServiceImpl* IMServer::GetPushNotificationService() const {
@@ -326,12 +336,13 @@ namespace im {
             redis_client_ = std::make_shared<im::db::RedisClient>(
                 redis_host_, redis_port_, redis_user_, redis_password_);
             
-            if (!redis_client_->Connect()) {
-                LOG_CRITICAL("无法连接到Redis: {}:{}", redis_host_, redis_port_);
-                return false;
-            }
+            std::cout << "正在连接Redis服务器: " << redis_host_ << ":" << redis_port_ << std::endl;
             
-            LOG_INFO("Redis连接成功，使用用户: {}", redis_user_.empty() ? "默认用户" : redis_user_);
+            // 使用异步连接，避免阻塞主线程
+            redis_client_->ConnectAsync();
+            
+            // 不阻塞地继续初始化其他组件
+            LOG_INFO("Redis客户端初始化成功，连接将在后台建立");
             return true;
         } catch (const std::exception& e) {
             LOG_CRITICAL("初始化Redis客户端失败: {}", e.what());
@@ -400,13 +411,54 @@ namespace im {
 
     bool IMServer::InitializeWebSocket() {
         LOG_INFO("初始化WebSocket服务...");
-    
-        // 这里应该实现WebSocket服务器初始化
-        // 由于WebSocket服务器实现较为复杂，这里省略具体实现
-        // 实际项目中需要根据需求实现WebSocket服务器
-    
-        LOG_INFO("WebSocket服务初始化成功");
-        return true;
+        
+        try {
+            // 创建WebSocket处理器
+            websocket_handler_ = std::make_shared<WebSocketHandler>(redis_client_);
+            
+            // 获取WebSocket端口
+            int websocket_port = im::utils::Config::GetInstance().GetInt("server.websocket_port", 8081);
+            
+            // 创建WebSocket监听器
+            auto const address = boost::asio::ip::make_address(server_address_);
+            websocket_acceptor_ = std::make_unique<tcp::acceptor>(io_context_, 
+                tcp::endpoint(address, websocket_port));
+            
+            // 开始接受连接
+            do_accept();
+            
+            // 启动IO上下文（在单独的线程中运行）
+            websocket_thread_ = std::thread([this]() {
+                try {
+                    LOG_INFO("WebSocket IO线程启动");
+                    io_context_.run();
+                    LOG_INFO("WebSocket IO线程退出");
+                } catch (const std::exception& e) {
+                    LOG_CRITICAL("WebSocket线程异常: {}", e.what());
+                }
+            });
+            
+            LOG_INFO("WebSocket服务初始化成功，监听端口: {}", websocket_port);
+            return true;
+        } catch (const std::exception& e) {
+            LOG_CRITICAL("初始化WebSocket服务失败: {}", e.what());
+            return false;
+        }
+    }
+
+    void IMServer::do_accept() {
+        websocket_acceptor_->async_accept(
+            [this](boost::system::error_code ec, tcp::socket socket) {
+                if (!ec) {
+                    LOG_INFO("接收到新的WebSocket连接");
+                    websocket_handler_->HandleNewConnection(std::move(socket));
+                } else {
+                    LOG_ERROR("WebSocket接受连接失败: {}", ec.message());
+                }
+                
+                // 继续接受下一个连接
+                do_accept();
+            });
     }
 }
 

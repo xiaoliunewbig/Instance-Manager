@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstdarg>
 #include <hiredis/hiredis.h>
+#include <thread>
 
 namespace im {
 namespace db {
@@ -23,6 +24,8 @@ bool RedisClient::Connect() {
         return true;
     }
     
+    std::cout << "尝试连接Redis: " << host_ << ":" << port_ << std::endl;
+    
     // 创建Redis上下文
     redis_context_ = redisConnect(host_.c_str(), port_);
     if (redis_context_ == nullptr || redis_context_->err) {
@@ -30,12 +33,14 @@ bool RedisClient::Connect() {
             std::string error = redis_context_->errstr;
             redisFree(redis_context_);
             redis_context_ = nullptr;
-            std::cerr << "Redis连接错误: " << error << std::endl;
+            std::cout << "Redis连接错误: " << error << std::endl;
         } else {
-            std::cerr << "Redis上下文分配失败" << std::endl;
+            std::cout << "Redis上下文分配失败" << std::endl;
         }
         return false;
     }
+    
+    std::cout << "Redis连接成功，准备进行认证" << std::endl;
     
     // 如果需要认证
     if (!password_.empty()) {
@@ -549,6 +554,13 @@ int64_t RedisClient::SetRemove(const std::string& key, const std::string& value)
     }
     
     return removed;
+}
+
+void RedisClient::ConnectAsync() {
+    // 使用值捕获this指针
+    std::thread([self = this]() {
+        self->Connect();
+    }).detach();
 }
 
 } // namespace db

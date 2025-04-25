@@ -5,7 +5,7 @@
 #include <grpcpp/grpcpp.h>
 #include "../../include/server/server.h"
 #include "../../include/server/utils/logger.h"
-#include "../../build/generated/service.grpc.pb.h"
+#include "generated/service.grpc.pb.h"
 
 using namespace im;
 
